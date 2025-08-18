@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+           margin: 0;
+           padding: 0;
+           box-sizing: border-box;
+       }
+
+       body {
+           font-family: Arial;
+           margin: 20px;
+       }
+
+       #chart_div {
+           margin: 2px;
+           padding: 1px;
+           width: 100%;
+           height: 300px;
+       }
+    </style>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+</head>
+
+<body>
+    <h2></h2>
+    <h3 data-es="subtitulo en español"></h3>
+    <div id="chart_div"></div>
+    <script>
+
+        function drawChartFromData(data, config) {
+    const { source, currencies, locale } = config;
+
+    window.__fxdata = data;
+    window.__fxconfig = config;
+
+    google.charts.load('current', { packages: 'corechart', language: locale });
+
+    google.charts.setOnLoadCallback(() => {
+
+        dibujar(window.__fxdata, window.__fxconfig);
+    });
+}
+
+function dibujar(json, config) {
+    const {source, currencies, locale} = config;
+    translateTags(locale);
+
+    const TRANSLATIONS = {
+        es: {
+            areaChartTitle: "Cotización de {source} → [{currencies}]"
+        },
+        en: {
+            areaChartTitle: "Quotation of {source} → [{currencies}]"
+        }
+    };
+
+    const cols = ['Fecha', ...currencies.split(',').map(s => s.trim())];
+    const dataArray = [cols];
+
+    // 5) Convierte fechas a Date() y empuja filas
+    for (const fechaStr in json.quotes) {
+        const parts = fechaStr.split('-').map(Number);
+        const jsDate = new Date(parts[0], parts[1] - 1, parts[2]);
+        const row = [jsDate];
+        currencies.split(',').forEach(currency => {
+            const value = json.quotes[fechaStr][source + currency] || null;
+            row.push(value);
+            row.push(crearTooltip(jsDate, source, currency, value, locale));
+        });
+        dataArray.push(row);
+    }
+
+    // 6) Construye la DataTable declarando el tipo date
+    const data = new google.visualization.DataTable();
+    data.addColumn('date', 'Fecha');
+    currencies.split(',').forEach(currency => {
+        data.addColumn('number', `${source}→${currency}`);
+        data.addColumn({ type: 'string', role: 'tooltip', p: { html: true } });
+    });
+    data.addRows(dataArray.slice(1));
+
+    const lang = (locale === 'es-AR') ? 'es' : 'en';
+    const titleTpl = TRANSLATIONS[lang].areaChartTitle;
+    const titleChart = format(titleTpl, { source, currencies });
+
+    // 7) Opciones con formato dd/MMM y crosshair punteado
+    const options = {
+        title: titleChart,
+        backgroundColor: 'transparent',
+        hAxis: {
+            format: 'dd/MMM',
+            slantedText: true,
+            slantedTextAngle: 45,
+            showTextEvery: 1,
+            gridlines: { count: -1 },
+            crosshair: {
+                trigger: 'both',
+                orientation: 'vertical',
+                color: '#666',
+                opacity: 0.3,
+                pattern: [4, 2]
+            }
+        },
+        vAxis: { title: 'Valor' },
+        legend: { position: 'top' },
+        areaOpacity: 0.4,
+        tooltip: { isHtml: true, trigger: 'focus' },
+        width: '100%',
+        height: 300
+    };
+
+    // 8) Dibuja el AreaChart
+    const chart = new google.visualization.AreaChart(document.getElementById('chart_div'));
+    chart.draw(data, options);
+
+    function formatearFecha(fechaStr, locale) {
+        const date = new Date(fechaStr);
+        return new Intl.DateTimeFormat(locale, {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(date);
+    }
+
+    function crearTooltip(fecha, base, destino, valor, locale) {
+        const fechaFmt = formatearFecha(fecha, locale);
+
+        const formatted = new Intl.NumberFormat(locale === 'es-AR' ? 'es-AR' : 'en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(valor || 0);
+        return `<div style="padding:5px 10px; white-space: nowrap;">
+                    <div style="margin-bottom:4px;"><b>${fechaFmt}</b></div>
+                    <div><b>1 ${base}</b> = <b>${formatted} ${destino}</b></div>
+                </div>`;
+    }
+
+    function translateTags(lang){
+        const h2 = document.querySelector('h2');
+        h2.textContent = (lang === 'es-AR') ? 'Cotización de divisas' : 'Exchange Rate';
+    }
+
+    function format(template, vars) {
+        return template.replace(/\{([^}]+)\}/g, (_, key) =>
+            vars[key] !== undefined ? vars[key] : `{${key}}`
+        );
+    }
+
+}
+    </script>
+</body>
+
+</html>
